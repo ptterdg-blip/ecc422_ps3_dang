@@ -187,10 +187,75 @@ can_gas |>
     y = "Log(Volume)"
   )
 
+
 retail_nsa_x13 <- retail_ts |> 
   filter(series_id == "RSAFSNA") |> 
   model(x13 = X_13ARIMA_SEATS(sales)) |> 
   components()
 
 retail_nsa_x13 |> autoplot()
+
+# In the seasonal panel, the highest factor will be December, probably around 1.2, which means about 20%
+# above trend. Over time, the peaks in December gets smaller in later years and becomes more narrow.
+
+sa_compare <- retail_nsa_x13 |> 
+  as_tibble() |> 
+  select(Month, mine = season_adjust) |> 
+  left_join(
+    retail_ts |> 
+      filter(series_id == "RSAFS") |> 
+      as_tibble() |> 
+      transmute(Month, census = sales), 
+    by = "Month"
+  ) |> 
+  mutate(pct_diff = 100 * (log(mine) - log(census)))
+
+sa_compare |> 
+  ggplot(aes(x = Month, y = pct_diff)) +
+  geom_line() +
+  labs(
+    title = "My X-13 Seasonal Adjustment Minus the Census Bureau's",
+    x = NULL, y = "Difference (%)"
+  ) + theme_minimal()
+
+# My adjustment is relatively similar to the Census Bureau's but there are some differences especially around 2020.
+# The Census Beureau's adjustment is more aggressive in 2020, and handles COVID months as special outliers. The largest differences are in 2020 and onwards.
+
+can_gas_fit <- can_gas |> 
+  model(TSLM(log_volume ~ trend() + season()))
+
+report(can_gas_fit)
+
+can_gas_fit |> 
+  tidy() |> 
+  select(term, estimate, std.error, statistic, p.value) |> 
+  knitr::kable(digits = 3)
+
+# The monthly growth rate is 0.004, so gas production grew by about 0.4% per month on average.
+# The most significant seasonal effect is June with a coefficient of -0.251.
+
+can_gas_fit |>
+  augment() |> 
+  ggplot(aes(x = Month)) + 
+  geom_line(aes(y = log_volume, color = "Actual")) +
+  geom_line(aes(y = .fitted, color = "Fitted")) +
+  labs(title = "Linear Trend + Seasonal Dummies Fit: Canadian Gas Production",
+       y = "log(Volume)", color = NULL) + theme_minimal()
+
+# In logs, the fitted trend is a straight line, while the actual series bends (fast growth early, slower later).
+
+can_gas_fit |> gg_tsresiduals()
+
+can_gas_fit |>
+  augment() |>
+  features(.innov, ljung_box, lag = 24)
+
+# The residuals are not white noise, as the p-value is less than 0.05, indicating that there is still some autocorrelation present in the residuals. This suggests
+# that the model may not be fully capturing the underlying patterns in the data, and further model refinement may be necessary.
+
+
+
+
+
+
 
