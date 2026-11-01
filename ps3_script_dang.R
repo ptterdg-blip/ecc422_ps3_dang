@@ -253,7 +253,48 @@ can_gas_fit |>
 # The residuals are not white noise, as the p-value is less than 0.05, indicating that there is still some autocorrelation present in the residuals. This suggests
 # that the model may not be fully capturing the underlying patterns in the data, and further model refinement may be necessary.
 
+gas_cv_fc <- can_gas |>
+  select(Month, Volume) |>
+  stretch_tsibble(.init = 240, .step = 1) |>
+  model(snaive = SNAIVE(Volume),
+        tslm   = TSLM(log(Volume) ~ trend() + season())) |>
+  forecast(h = 1)
 
+gas_cv_fc |>
+  accuracy(can_gas, measures = list(MAE = MAE, RMSE = RMSE))
+
+# The first training window is the 240 months from Jan 1960 to Dec 1979, so the first forecast is for Jan 1980.
+# The last training window (ending Feb 2005) forecasts March 2005, which isn't in the data, so the last forecast that can evaluated is for Feb 2005.
+# That's 302 one-month ahead forecasts per model. SNAIVE is far more accurate than the trend + seasonal dummies model, and the
+# two metrics agree.
+
+errs <- gas_cv_fc |>
+  as_tibble() |>
+  left_join(as_tibble(can_gas) |> select(Month, actual = Volume),
+            by = "Month") |>
+  mutate(e = actual - .mean) |>
+  select(Month, .model, e) |>
+  pivot_wider(names_from = .model, values_from = e) |>
+  na.omit()
+
+forecast::dm.test(errs$snaive, errs$tslm, h = 1, power = 1)
+
+# The DM = -31.278, and p-value <2.2e-16, so we reject the null hypothesis that the two models have equal predictive accuracy.
+# The SNAIVE model is significantly more accurate than the TSLM model for one month ahead forecasts of Gas production.
+
+gas_cv_fc_roll <- can_gas |> 
+  select(Month, Volume) |> 
+  slide_tsibble(.size = 240, .step = 1) |> 
+  model(snaive = SNAIVE(Volume), 
+        tslm = TSLM(log(Volume) ~ trend() + season())) |> 
+  forecast(h = 1)
+
+gas_cv_fc_roll |> 
+  accuracy(can_gas, measures = list(MAE = MAE, RMSE = RMSE))
+
+# The MAE and RMSE values are the same as the previous TS-CV results for the random walk.
+# The TSLM model improved with an MAE = 2.09 and RMSE = 2.42. This is beacuse each window only covers 20 years.
+# The trend is then fit to recent growth instead of being pulled up by the 1960's.
 
 
 
