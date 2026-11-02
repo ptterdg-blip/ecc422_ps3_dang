@@ -310,7 +310,7 @@ retail_nsa_x13 <- retail_ts |>
 retail_nsa_x13 |> autoplot()
 ```
 
-**4.3a:** The seasonal factor is highest in December, at about **1.2 \[CHECK against your seasonal panel\]**, meaning December sales run about 20% above trend. Over time, the December peaks get smaller and the seasonal swings narrow.
+**4.3a:** The seasonal factor is highest in December, at about **1.2** , meaning December sales run about 20% above trend. Over time, the December peaks get smaller and the seasonal swings narrow.
 
 ```{r}
 #| label: x13-compare
